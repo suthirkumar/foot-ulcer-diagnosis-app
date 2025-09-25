@@ -1,16 +1,7 @@
-# Streamlit for web app
 streamlit==1.50.0
-
-# PyTorch and torchvision for model inference
-torch==2.1.0
-torchvision==0.16.1
-
-# Timm for DeiT model
+torch==2.1.0+cpu --extra-index-url https://download.pytorch.org/whl/cpu
+torchvision==0.16.1+cpu --extra-index-url https://download.pytorch.org/whl/cpu
 timm==0.9.8
-
-# Image processing
 Pillow==11.3.0
-
-# Optional utilities used in Streamlit charts, etc.
 numpy==2.3.3
 pandas==2.3.2
