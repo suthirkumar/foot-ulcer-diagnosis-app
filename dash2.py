@@ -14,16 +14,15 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 ulcer_classes = ['no_ulcer', 'ulcer']
 severity_classes = ['high', 'medium', 'low']
 
+# Use relative paths inside repo
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
 ulcer_model_path = os.path.join(BASE_DIR, "models", "foot_ulcer_diagnosis_deit.pth")
 severity_model_path = os.path.join(BASE_DIR, "models", "Severity_checking_model_complete.pth")
 
 # -----------------------------
-# HELPER FUNCTIONS
+# HELPER FUNCTION TO LOAD MODELS
 # -----------------------------
 def load_model(model_path, architecture='deit_small_patch16_224', num_classes=2, is_timm=True):
-    """Load model weights safely using weights_only=False (trusted source)."""
     if is_timm:
         model = create_model(architecture, pretrained=False, num_classes=num_classes)
     else:
@@ -41,6 +40,9 @@ def load_model(model_path, architecture='deit_small_patch16_224', num_classes=2,
     model.eval()
     return model
 
+# -----------------------------
+# LOAD MODELS (CACHED)
+# -----------------------------
 @st.cache_resource
 def get_models():
     ulcer_model = load_model(ulcer_model_path, num_classes=len(ulcer_classes))
@@ -89,13 +91,18 @@ if 'uploaded_img' not in st.session_state:
     st.session_state.uploaded_img = None
 
 # -----------------------------
-# NAVIGATION
+# PAGE NAVIGATION
 # -----------------------------
 def next_page():
     st.session_state.page += 1
 
 def prev_page():
     st.session_state.page -= 1
+
+def reset_app():
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
+    st.experimental_rerun()
 
 # -----------------------------
 # PAGE 1: PATIENT DETAILS
@@ -114,7 +121,7 @@ if st.session_state.page == 1:
             st.warning("Please fill in all details!")
 
 # -----------------------------
-# PAGE 2: UPLOAD IMAGE
+# PAGE 2: UPLOAD FOOT IMAGE
 # -----------------------------
 elif st.session_state.page == 2:
     st.title("🦶 Foot Ulcer Diagnosis - Upload Foot Image")
@@ -145,20 +152,22 @@ elif st.session_state.page == 3:
     for k, v in st.session_state.patient_info.items():
         st.write(f"**{k.capitalize()}:** {v}")
 
+    # Ulcer detection
     ulcer_result, ulcer_conf, ulcer_probs = predict_ulcer(img)
 
+    # Severity prediction
     if ulcer_result == 'ulcer':
         severity_result, severity_conf, severity_probs = predict_severity(img)
     else:
         severity_result, severity_conf, severity_probs = None, None, None
 
+    # Results display
     st.subheader("Diagnosis Results")
     col1, col2 = st.columns(2)
     with col1:
         st.write("**Ulcer Detection**")
         st.write(f"Prediction: {ulcer_result} ({ulcer_conf:.2f}% confidence)")
         st.bar_chart({ulcer_classes[i]: float(ulcer_probs[i]) for i in range(len(ulcer_classes))})
-
     with col2:
         if severity_result:
             st.write("**Severity Prediction**")
@@ -167,6 +176,7 @@ elif st.session_state.page == 3:
         else:
             st.info("No ulcer detected → Severity check skipped.")
 
+    # Summary card
     st.subheader("Summary")
     if ulcer_result == 'ulcer':
         st.markdown(
@@ -179,10 +189,9 @@ elif st.session_state.page == 3:
             unsafe_allow_html=True
         )
 
+    # Back / Reset buttons
     col1, col2 = st.columns(2)
     with col1:
         st.button("⬅ Back", on_click=prev_page)
     with col2:
-        if st.button("🔄 Reset"):
-            st.session_state.clear()
-            st.rerun()
+        st.button("Reset", on_click=reset_app)
