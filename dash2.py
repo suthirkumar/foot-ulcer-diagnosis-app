@@ -3,9 +3,10 @@ import torch
 from timm import create_model
 from torchvision import transforms, models
 from PIL import Image
+import os
 
 # -----------------------------
-# CONFIGuration 
+# CONFIGURATION
 # -----------------------------
 st.set_page_config(page_title="Foot Ulcer Diagnosis", layout="wide")
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -13,8 +14,10 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 ulcer_classes = ['no_ulcer', 'ulcer']
 severity_classes = ['high', 'medium', 'low']
 
-ulcer_model_path = r"C:\Users\suthi\OneDrive\Desktop\foot_ulcer_project2\foot_ulcer_diagnosis_deit.pth"
-severity_model_path = r"C:\Users\suthi\OneDrive\Desktop\foot_ulcer_project2\Severity_checking_model_complete.pth"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+ulcer_model_path = os.path.join(BASE_DIR, "models", "foot_ulcer_diagnosis_deit.pth")
+severity_model_path = os.path.join(BASE_DIR, "models", "Severity_checking_model_complete.pth")
 
 # -----------------------------
 # HELPER FUNCTIONS
@@ -27,10 +30,8 @@ def load_model(model_path, architecture='deit_small_patch16_224', num_classes=2,
         model = models.resnet18(pretrained=False)
         model.fc = torch.nn.Linear(model.fc.in_features, num_classes)
 
-    # Use weights_only=False to fully load checkpoint (trusted source)
     checkpoint = torch.load(model_path, map_location=device, weights_only=False)
 
-    # If checkpoint contains state dict
     if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
         model.load_state_dict(checkpoint['model_state_dict'])
     else:
@@ -40,9 +41,6 @@ def load_model(model_path, architecture='deit_small_patch16_224', num_classes=2,
     model.eval()
     return model
 
-# -----------------------------
-# LOAD MODELS ONCE
-# -----------------------------
 @st.cache_resource
 def get_models():
     ulcer_model = load_model(ulcer_model_path, num_classes=len(ulcer_classes))
@@ -52,7 +50,7 @@ def get_models():
 ulcer_model, severity_model = get_models()
 
 # -----------------------------
-# IMAGE TRANSFORMATION
+# IMAGE TRANSFORM
 # -----------------------------
 transform = transforms.Compose([
     transforms.Resize((224, 224)),
@@ -89,11 +87,9 @@ if 'patient_info' not in st.session_state:
     st.session_state.patient_info = {}
 if 'uploaded_img' not in st.session_state:
     st.session_state.uploaded_img = None
-if 'diagnosis' not in st.session_state:
-    st.session_state.diagnosis = {}
 
 # -----------------------------
-# PAGE NAVIGATION
+# NAVIGATION
 # -----------------------------
 def next_page():
     st.session_state.page += 1
@@ -118,22 +114,19 @@ if st.session_state.page == 1:
             st.warning("Please fill in all details!")
 
 # -----------------------------
-# PAGE 2: UPLOAD FOOT IMAGE
+# PAGE 2: UPLOAD IMAGE
 # -----------------------------
 elif st.session_state.page == 2:
     st.title("🦶 Foot Ulcer Diagnosis - Upload Foot Image")
-    st.write("Upload foot image for diagnosis:")
-
     uploaded_file = st.file_uploader("Upload Image", type=["jpg", "jpeg", "png"])
     if uploaded_file:
         img = Image.open(uploaded_file).convert("RGB")
-        st.image(img, caption="Uploaded Image", use_column_width=False, width=300)
+        st.image(img, caption="Uploaded Image", width=300)
         st.session_state.uploaded_img = img
 
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("⬅ Back"):
-            prev_page()
+        st.button("⬅ Back", on_click=prev_page)
     with col2:
         if uploaded_file and st.session_state.patient_info.get('diabetes') == "Yes":
             st.button("Next", on_click=next_page)
@@ -152,16 +145,13 @@ elif st.session_state.page == 3:
     for k, v in st.session_state.patient_info.items():
         st.write(f"**{k.capitalize()}:** {v}")
 
-    # ULVER DETECTION
     ulcer_result, ulcer_conf, ulcer_probs = predict_ulcer(img)
 
-    # SEVERITY PREDICTION
     if ulcer_result == 'ulcer':
         severity_result, severity_conf, severity_probs = predict_severity(img)
     else:
         severity_result, severity_conf, severity_probs = None, None, None
 
-    # RESULTS DISPLAY
     st.subheader("Diagnosis Results")
     col1, col2 = st.columns(2)
     with col1:
@@ -177,7 +167,6 @@ elif st.session_state.page == 3:
         else:
             st.info("No ulcer detected → Severity check skipped.")
 
-    # SUMMARY CARD
     st.subheader("Summary")
     if ulcer_result == 'ulcer':
         st.markdown(
@@ -190,21 +179,10 @@ elif st.session_state.page == 3:
             unsafe_allow_html=True
         )
 
-    # BACK / RESET
     col1, col2 = st.columns(2)
     with col1:
         st.button("⬅ Back", on_click=prev_page)
-    
     with col2:
-        if st.session_state.get('rerun', False):
-            # Reset the flag first
-            st.session_state['rerun'] = False
-            # Then rerun the script
-            st.experimental_rerun()
-        
-        # Button to trigger rerun
-        st.button("Reset", on_click=lambda: st.session_state.update({'rerun': True}))
-
-
-
-            
+        if st.button("🔄 Reset"):
+            st.session_state.clear()
+            st.rerun()
